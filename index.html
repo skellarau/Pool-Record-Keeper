@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#007bff">
+    <title>Pool Records</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root { --primary: #007bff; --bg: #f4f7f6; --text: #333; }
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 15px; background: var(--bg); color: var(--text); margin: 0; }
+        
+        /* STICKY HEADER LOGIC */
+        .header-card { 
+            position: sticky; 
+            top: 10px; 
+            z-index: 1000; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 15px; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+            margin-bottom: 20px;
+        }
+
+        .container { max-width: 500px; margin: auto; }
+        h2 { margin-top: 0; font-size: 1.4rem; color: var(--primary); text-align: center; }
+        
+        label { display: block; margin: 12px 0 5px; font-weight: 600; font-size: 0.9rem; }
+        input, textarea { 
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; 
+            box-sizing: border-box; font-size: 16px; background: #fafafa;
+        }
+
+        /* Error state for validation */
+        .input-error { border-color: #dc3545 !important; background: #fff5f5; }
+        
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        button { 
+            width: 100%; padding: 14px; border: none; border-radius: 8px; 
+            font-size: 16px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
+        }
+        .btn-save { background: var(--primary); color: white; grid-column: span 2; }
+        .btn-export { background: #6c757d; color: white; }
+        .btn-clear { background: #efefef; color: #dc3545; }
+        
+        .history-title { font-size: 1.1rem; margin: 20px 0 10px; font-weight: 700; }
+        .log-item { 
+            background: white; padding: 12px; border-radius: 10px; 
+            margin-bottom: 10px; border-left: 5px solid var(--primary); font-size: 0.85rem;
+        }
+        .log-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 5px; font-weight: bold; }
+        .log-comment { margin-top: 5px; font-style: italic; color: #666; border-top: 1px solid #eee; padding-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-card">
+        <h2>Pool Maintenance</h2>
+        
+        <!-- DATE PICKER WITH DEFAULT VALUE -->
+        <label>Date</label>
+        <input type="date" id="logDate">
+
+        <label>Alkalinity (ppm)</label>
+        <input type="number" id="alk" inputmode="numeric" placeholder="e.g. 100">
+
+        <label>Pump Pressure (psi)</label>
+        <input type="number" id="press" inputmode="decimal" placeholder="e.g. 15">
+
+        <label>Sodium Bicarb Added (g)</label>
+        <input type="number" id="bicarb" inputmode="numeric" placeholder="e.g. 500">
+
+        <label>Comments</label>
+        <textarea id="comments" rows="2" placeholder="Weather, backwash, etc."></textarea>
+
+        <div class="btn-group">
+            <button class="btn-save" onclick="saveEntry()">Save Entry</button>
+            <button class="btn-export" onclick="exportCSV()">Export CSV</button>
+            <button class="btn-clear" onclick="clearLogs()">Clear All</button>
+        </div>
+    </div>
+
+    <div class="history-title">Recent Records</div>
+    <div id="logContainer"></div>
+</div>
+
+<script>
+    // Initialise Date Picker to Today
+    document.getElementById('logDate').valueAsDate = new Date();
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log("SW failed", err));
+    }
+
+    function saveEntry() {
+        const dateInput = document.getElementById('logDate');
+        const alk = document.getElementById('alk');
+        const press = document.getElementById('press');
+        const bicarb = document.getElementById('bicarb');
+        const comm = document.getElementById('comments').value;
+
+        // VALIDATION: Ensure at least Alkalinity or Pressure is filled
+        if(!alk.value && !press.value) {
+            alk.classList.add('input-error');
+            press.classList.add('input-error');
+            alert("Please enter Alkalinity or Pump Pressure.");
+            return;
+        } else {
+            alk.classList.remove('input-error');
+            press.classList.remove('input-error');
+        }
+
+        const entry = {
+            date: new Date(dateInput.value).toLocaleDateString('en-AU'),
+            alk: alk.value || '-',
+            press: press.value || '-',
+            bicarb: bicarb.value || '0',
+            comm: comm || ''
+        };
+
+        let logs = JSON.parse(localStorage.getItem('poolLogs')) || [];
+        logs.unshift(entry);
+        localStorage.setItem('poolLogs', JSON.stringify(logs));
+        
+        renderLogs();
+        clearInputs();
+    }
+
+    function renderLogs() {
+        const logs = JSON.parse(localStorage.getItem('poolLogs')) || [];
+        const container = document.getElementById('logContainer');
+        
+        if (logs.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#888;">No records yet.</p>';
+            return;
+        }
+
+        container.innerHTML = logs.map(l => `
+            <div class="log-item">
+                <div style="color:var(--primary); font-weight:700;">${l.date}</div>
+                <div class="log-grid">
+                    <span>Alk: ${l.alk}</span>
+                    <span>Pres: ${l.press}</span>
+                    <span>Bicarb: ${l.bicarb}g</span>
+                </div>
+                ${l.comm ? `<div class="log-comment">${l.comm}</div>` : ''}
+            </div>
+        `).join('');
+    }
+
+    function clearInputs() {
+        ['alk', 'press', 'bicarb', 'comments'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('logDate').valueAsDate = new Date();
+    }
+
+    function exportCSV() {
+        const logs = JSON.parse(localStorage.getItem('poolLogs')) || [];
+        if(logs.length === 0) return alert("No data to export.");
+        
+        let csv = "Date,Alkalinity(ppm),Pressure,Bicarb(g),Comments\n";
+        logs.forEach(l => {
+            csv += `${l.date},${l.alk},${l.press},${l.bicarb},"${l.comm.replace(/"/g, '""')}"\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pool_logs_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+    }
+
+    function clearLogs() {
+        if(confirm("Permanently delete all pool records?")) {
+            localStorage.removeItem('poolLogs');
+            renderLogs();
+        }
+    }
+
+    window.onload = renderLogs;
+</script>
+
+</body>
+</html>
