@@ -1,6 +1,6 @@
 {
-  "name": "Pool Records Tracker",
-  "short_name": "PoolLogs",
+  "name": "Pool Maintenance Records",
+  "short_name": "Pool Logs",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#f4f7f6",
